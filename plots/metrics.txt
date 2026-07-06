@@ -1,0 +1,8 @@
+========================================
+           EVALUATION METRICS
+========================================
+Mean Absolute Error (MAE):      15.27 units
+Root Mean Squared Error (RMSE): 23.69 units
+Mean Absolute % Error (MAPE):   22.62%
+R-squared (R2) Score:           0.9860
+========================================
