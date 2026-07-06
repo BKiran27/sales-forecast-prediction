@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sales Forecast Dashboard - AI Live Model</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            --bg-color: #0c0f1d;
+            --card-bg: rgba(20, 24, 46, 0.65);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --accent-primary: #6366f1; /* Indigo */
+            --accent-glow: rgba(99, 102, 241, 0.15);
+            --gradient-accent: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+            --gradient-success: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            --gradient-warning: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            --font-main: 'Outfit', sans-serif;
+            --font-sub: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.5;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.08) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(168, 85, 247, 0.08) 0%, transparent 40%);
+            background-attachment: fixed;
+            padding: 2rem 1rem;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        /* Header Style */
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .header-title h1 {
+            font-size: 2.2rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            background: linear-gradient(to right, #ffffff 30%, #a855f7 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header-title p {
+            color: var(--text-secondary);
+            font-family: var(--font-sub);
+            font-size: 0.95rem;
+            margin-top: 0.25rem;
+        }
+
+        .badge-live {
+            background: rgba(16, 185, 129, 0.1);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            padding: 0.4rem 1rem;
+            border-radius: 50px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.1);
+        }
+
+        .badge-live::before {
+            content: "";
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background-color: #10b981;
+            border-radius: 50%;
+            animation: pulse 1.8s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+
+        /* Layout Grid */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            gap: 2rem;
+        }
+
+        @media (max-width: 1024px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Card Elements */
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 18px;
+            padding: 1.75rem;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .card-title {
+            font-size: 1.15rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            color: var(--text-primary);
+            border-left: 3px solid #6366f1;
+            padding-left: 0.75rem;
+        }
+
+        /* Form Controls */
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            color: var(--text-secondary);
+        }
+
+        .form-control {
+            width: 100%;
+            background: rgba(10, 12, 22, 0.8);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 0.75rem 1rem;
+            color: var(--text-primary);
+            font-family: var(--font-sub);
+            font-size: 0.9rem;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .form-control:focus {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 10px var(--accent-glow);
+        }
+
+        /* Toggles layout */
+        .toggle-group {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.25rem;
+            padding: 0.5rem 0;
+        }
+
+        .toggle-label {
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        /* Custom Switch */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 46px;
+            height: 24px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(255, 255, 255, 0.15);
+            transition: .3s;
+            border-radius: 24px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background: var(--gradient-accent);
+        }
+
+        input:focus + .slider {
+            box-shadow: 0 0 1px #6366f1;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(22px);
+        }
+
+        /* Run button */
+        .btn-submit {
+            display: block;
+            width: 100%;
+            background: var(--gradient-accent);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 0.9rem 1.5rem;
+            font-family: var(--font-main);
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(168, 85, 247, 0.3);
+            text-align: center;
+            margin-top: 1.5rem;
+        }
+
+        .btn-submit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(168, 85, 247, 0.45);
+        }
+
+        .btn-submit:active {
+            transform: translateY(0);
+        }
+
+        /* Results view */
+        .results-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        /* Analytics summary grid */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+        }
+
+        @media (max-width: 640px) {
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .metric-card {
+            background: rgba(20, 24, 46, 0.4);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            padding: 1.25rem 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .metric-label {
+            font-family: var(--font-sub);
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+        }
+
+        .metric-val {
+            font-size: 1.8rem;
+            font-weight: 700;
+            background: linear-gradient(to right, #ffffff, #6366f1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* Visualizations */
+        .chart-container {
+            position: relative;
+            height: 380px;
+            width: 100%;
+        }
+
+        /* Table */
+        .table-container {
+            max-height: 350px;
+            overflow-y: auto;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+        }
+
+        .forecast-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.9rem;
+        }
+
+        .forecast-table th {
+            background-color: rgba(10, 12, 22, 0.9);
+            color: var(--text-secondary);
+            font-family: var(--font-sub);
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 0.9rem 1.2rem;
+            position: sticky;
+            top: 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .forecast-table td {
+            padding: 0.9rem 1.2rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            font-family: var(--font-sub);
+            color: var(--text-primary);
+        }
+
+        .forecast-table tr:hover td {
+            background-color: rgba(255, 255, 255, 0.02);
+        }
+
+        .badge-weather {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .badge-clear { background: rgba(99, 102, 241, 0.15); color: #818cf8; }
+        .badge-rain { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+        .badge-snow { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+
+        .badge-holiday {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            padding: 0.25rem 0.5rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        /* Error Banner */
+        .error-banner {
+            display: none;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            color: #f87171;
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            font-size: 0.95rem;
+            margin-bottom: 1.5rem;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- Header -->
+    <header>
+        <div class="header-title">
+            <h1>Sales Forecast Dashboard</h1>
+            <p>Recursive Multi-Step XGBoost ML Forecasting Pipeline</p>
+        </div>
+        <div class="badge-live">LIVE MODEL RUNNING</div>
+    </header>
+
+    <!-- Content Grid -->
+    <div class="dashboard-grid">
+        <!-- Control Panel Left -->
+        <div class="card">
+            <div class="card-title">Forecast Controls</div>
+            
+            <form id="controlForm">
+                <!-- Date Range -->
+                <div class="form-group">
+                    <label for="startDate">Start Date</label>
+                    <input type="date" id="startDate" class="form-control" value="2026-01-01" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="endDate">End Date</label>
+                    <input type="date" id="endDate" class="form-control" value="2026-01-14" required>
+                </div>
+
+                <!-- Store Selection -->
+                <div class="form-group">
+                    <label for="storeSelect">Target Store</label>
+                    <select id="storeSelect" class="form-control">
+                        <option value="Store_1">Store 1 (Base volume: 100%)</option>
+                        <option value="Store_2">Store 2 (Large volume: 125%)</option>
+                        <option value="Store_3">Store 3 (Small volume: 85%)</option>
+                        <option value="Store_4">Store 4 (Medium volume: 110%)</option>
+                        <option value="Store_5">Store 5 (Standard volume: 95%)</option>
+                    </select>
+                </div>
+
+                <!-- Product Category -->
+                <div class="form-group">
+                    <label for="categorySelect">Product Category</label>
+                    <select id="categorySelect" class="form-control">
+                        <option value="Electronics">Electronics</option>
+                        <option value="Apparel" selected>Apparel</option>
+                        <option value="Grocery">Grocery</option>
+                        <option value="Home_Kitchen">Home & Kitchen</option>
+                        <option value="Beauty_Personal_Care">Beauty & Personal Care</option>
+                    </select>
+                </div>
+
+                <!-- Weather Condition -->
+                <div class="form-group">
+                    <label for="weatherSelect">Weather Condition</label>
+                    <select id="weatherSelect" class="form-control">
+                        <option value="Clear">Clear Skies</option>
+                        <option value="Rain">Rainy Day (-6% Retail Drop)</option>
+                        <option value="Snow">Heavy Snowstorm (-17% Traffic Collapse)</option>
+                    </select>
+                </div>
+
+                <!-- Promotional Toggles -->
+                <div class="toggle-group">
+                    <div class="toggle-label">Active Promotion (Store Lift)</div>
+                    <label class="switch">
+                        <input type="checkbox" id="promoToggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="toggle-group">
+                    <div class="toggle-label">Competitor Promo Active (-12% Drop)</div>
+                    <label class="switch">
+                        <input type="checkbox" id="compToggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="toggle-group">
+                    <div class="toggle-label" style="color: #f87171;">Force Out of Stock (0 Sales)</div>
+                    <label class="switch">
+                        <input type="checkbox" id="stockoutToggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <button type="submit" class="btn-submit">Generate Live Forecast</button>
+            </form>
+        </div>
+
+        <!-- Dashboard View Right -->
+        <div class="results-panel">
+            <div id="errorBanner" class="error-banner"></div>
+
+            <!-- Metrics -->
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <span class="metric-label">Total Forecasted Volume</span>
+                    <span id="metricTotal" class="metric-val">-</span>
+                </div>
+                <div class="metric-card">
+                    <span class="metric-label">Peak Daily Demand</span>
+                    <span id="metricPeak" class="metric-val">-</span>
+                </div>
+                <div class="metric-card">
+                    <span class="metric-label">Average Daily Units</span>
+                    <span id="metricAvg" class="metric-val">-</span>
+                </div>
+            </div>
+
+            <!-- Visualization Plot -->
+            <div class="card">
+                <div class="card-title">Daily Sales Trend Forecast</div>
+                <div class="chart-container">
+                    <canvas id="forecastChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Breakdown Table -->
+            <div class="card">
+                <div class="card-title">Daily Forecast Breakdown</div>
+                <div class="table-container">
+                    <table class="forecast-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Day of Week</th>
+                                <th>Holiday Status</th>
+                                <th>Est. Temp (°F)</th>
+                                <th>Forecasted Demand</th>
+                            </tr>
+                        </thead>
+                        <tbody id="forecastTableBody">
+                            <tr>
+                                <td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 2rem;">
+                                    Set parameters and click Generate Live Forecast.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let forecastChart = null;
+
+    document.getElementById('controlForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const errorBanner = document.getElementById('errorBanner');
+        errorBanner.style.display = 'none';
+        
+        // Prepare parameters
+        const payload = {
+            start_date: document.getElementById('startDate').value,
+            end_date: document.getElementById('endDate').value,
+            store_id: document.getElementById('storeSelect').value,
+            category: document.getElementById('categorySelect').value,
+            promotion_active: document.getElementById('promoToggle').checked ? 1 : 0,
+            competitor_discount: document.getElementById('compToggle').checked ? 1 : 0,
+            weather_event: document.getElementById('weatherSelect').value,
+            is_stockout: document.getElementById('stockoutToggle').checked ? 1 : 0
+        };
+
+        try {
+            const btnSubmit = document.querySelector('.btn-submit');
+            btnSubmit.textContent = 'Calculating...';
+            btnSubmit.disabled = true;
+
+            const response = await fetch('/api/predict', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+
+            const result = await response.json();
+            
+            btnSubmit.textContent = 'Generate Live Forecast';
+            btnSubmit.disabled = false;
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Server returned an error');
+            }
+
+            // Update Metrics Cards
+            document.getElementById('metricTotal').textContent = result.summary.total_sales.toLocaleString() + ' units';
+            document.getElementById('metricPeak').textContent = result.summary.max_sales.toLocaleString() + ' units';
+            document.getElementById('metricAvg').textContent = result.summary.avg_sales.toLocaleString() + ' units';
+
+            // Populate Table
+            const tbody = document.getElementById('forecastTableBody');
+            tbody.innerHTML = '';
+            
+            result.data.forEach(row => {
+                const tr = document.createElement('tr');
+                
+                // Weather Badge
+                const weatherClass = payload.weather_event.toLowerCase();
+                const weatherBadge = `<span class="badge-weather badge-${weatherClass}">${payload.weather_event}</span>`;
+                
+                // Holiday Badge
+                const holidayCell = row.is_holiday === 1 
+                    ? '<span class="badge-holiday">Yes (Holiday)</span>' 
+                    : '<span style="color: var(--text-secondary);">Regular Day</span>';
+
+                tr.innerHTML = `
+                    <td><strong>${row.date}</strong></td>
+                    <td>${row.day_of_week}</td>
+                    <td>${holidayCell}</td>
+                    <td>${row.temp}°F</td>
+                    <td style="font-size: 1rem; font-weight: 600; color: #818cf8;">${row.forecasted_sales.toLocaleString()} units</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            // Render Chart
+            renderChart(result.data, payload.category);
+
+        } catch (err) {
+            console.error(err);
+            errorBanner.textContent = `Error: ${err.message}`;
+            errorBanner.style.display = 'block';
+            
+            const btnSubmit = document.querySelector('.btn-submit');
+            btnSubmit.textContent = 'Generate Live Forecast';
+            btnSubmit.disabled = false;
+        }
+    });
+
+    function renderChart(data, category) {
+        const ctx = document.getElementById('forecastChart').getContext('2d');
+        
+        const labels = data.map(r => r.date);
+        const sales = data.map(r => r.forecasted_sales);
+
+        if (forecastChart) {
+            forecastChart.destroy();
+        }
+
+        forecastChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: `Forecasted ${category} Demand`,
+                    data: sales,
+                    borderColor: '#6366f1',
+                    borderWidth: 3,
+                    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                    fill: true,
+                    tension: 0.35,
+                    pointBackgroundColor: '#a855f7',
+                    pointBorderColor: '#ffffff',
+                    pointHoverRadius: 7,
+                    pointHoverBackgroundColor: '#ffffff',
+                    pointHoverBorderColor: '#6366f1'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: '#f3f4f6',
+                            font: {
+                                family: 'Plus Jakarta Sans',
+                                size: 12
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.05)'
+                        },
+                        ticks: {
+                            color: '#9ca3af',
+                            font: {
+                                family: 'Plus Jakarta Sans'
+                            }
+                        }
+                    },
+                    y: {
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.05)'
+                        },
+                        ticks: {
+                            color: '#9ca3af',
+                            font: {
+                                family: 'Plus Jakarta Sans'
+                            }
+                        },
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    }
+</script>
+</body>
+</html>
