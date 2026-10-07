@@ -132,7 +132,13 @@ class SimpleModelLoader:
 
             # Recreate Ensemble if individual models exist
             if 'ensemble' not in self.models and ('xgboost' in self.models or 'lightgbm' in self.models):
-                from .ensemble_model_standalone import EnsembleModel
+                try:
+                    from ui.utils.ensemble_model_standalone import EnsembleModel
+                except ImportError:
+                    try:
+                        from .ensemble_model_standalone import EnsembleModel
+                    except ImportError:
+                        from ensemble_model_standalone import EnsembleModel
                 ens_models = {}
                 weights = {}
                 if 'xgboost' in self.models:
@@ -199,7 +205,13 @@ class SimpleModelLoader:
                     try:
                         self.models['ensemble'] = joblib.load(ens_path)
                     except Exception:
-                        from .ensemble_model_standalone import EnsembleModel
+                        try:
+                            from ui.utils.ensemble_model_standalone import EnsembleModel
+                        except ImportError:
+                            try:
+                                from .ensemble_model_standalone import EnsembleModel
+                            except ImportError:
+                                from ensemble_model_standalone import EnsembleModel
                         self.models['ensemble'] = EnsembleModel(
                             {'xgboost': self.models.get('xgboost'), 'lightgbm': self.models.get('lightgbm')},
                             {'xgboost': 0.5, 'lightgbm': 0.5}

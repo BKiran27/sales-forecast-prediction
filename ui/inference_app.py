@@ -12,13 +12,25 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-# Add local path for utility imports
+# Add both root, ui, and ui/utils directories to sys.path
 curr_dir = os.path.dirname(os.path.abspath(__file__))
-if curr_dir not in sys.path:
-    sys.path.append(curr_dir)
+root_dir = os.path.dirname(curr_dir)
+ui_utils_dir = os.path.join(curr_dir, "utils")
 
-from utils.simple_model_loader import SimpleModelLoader
-from utils.simple_predictor import SimplePredictor
+for p in [root_dir, curr_dir, ui_utils_dir]:
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
+try:
+    from ui.utils.simple_model_loader import SimpleModelLoader
+    from ui.utils.simple_predictor import SimplePredictor
+except ImportError:
+    try:
+        from utils.simple_model_loader import SimpleModelLoader
+        from utils.simple_predictor import SimplePredictor
+    except ImportError:
+        from simple_model_loader import SimpleModelLoader
+        from simple_predictor import SimplePredictor
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
