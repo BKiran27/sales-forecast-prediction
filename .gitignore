@@ -41,3 +41,9 @@ python/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Generated data partitions
+data/raw_partitions/
+mlruns/
+.pytest_cache/
+

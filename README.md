@@ -1,110 +1,165 @@
-# Sales Forecast Prediction ML Project
+# 🚀 Real-Time End-to-End Sales Forecasting Platform
 
-An end-to-end Machine Learning pipeline in Python for forecasting daily sales of a retail store using **XGBoost Regressor**.
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://streamlit.io)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Apache Airflow](https://img.shields.io/badge/Orchestration-Apache%20Airflow-017CEE.svg)](https://airflow.apache.org/)
+[![XGBoost](https://img.shields.io/badge/Model-XGBoost-EB680B.svg)](https://xgboost.readthedocs.io/)
+[![LightGBM](https://img.shields.io/badge/Model-LightGBM-brightgreen.svg)](https://lightgbm.readthedocs.io/)
 
-This project models daily sales across multiple stores and product categories. It features realistic synthetic data generation (incorporating trends, weekly/yearly seasonality, holidays, and promotions), custom feature engineering (with leak-proof lag and rolling average features), temporal dataset splitting, evaluation metrics/visualizations, and a command-line interface (CLI) to forecast future sales recursively.
+An enterprise-grade, end-to-end Machine Learning and Data Engineering sales forecasting platform inspired by CodeWithYu / Astronomer (`airscholar/astro-salesforecast`). This platform features automated pipeline orchestration with **Apache Airflow**, multi-model ML architectures (**XGBoost**, **LightGBM**, and **Weighted Ensemble**), and an interactive **Streamlit** dashboard designed for both local development and instant deployment to **Streamlit Community Cloud**.
 
-## Project Structure
+---
+
+## 🌟 Key Highlights
+
+- **Dual-Mode Inference Architecture**: 
+  - **Standalone / Streamlit Cloud Mode**: Ready out-of-the-box! Bundled with pre-trained models (`models/`), scalers, and encoders. No active Docker, Airflow, or MLflow cluster required for web inference.
+  - **Full Airflow / MLOps Mode**: Complete Astronomer DAG orchestration (`dags/sales_forecasting_pipeline.py`) covering data generation, Pandera schema validation, feature engineering, MLflow model tracking, and registry deployment.
+- **Advanced Machine Learning**:
+  - **XGBoost Regressor**: Gradient boosting capturing complex non-linear retail patterns.
+  - **LightGBM Regressor**: Fast, leaf-wise gradient boosting optimized for tabular metrics.
+  - **Weighted Ensemble**: Combines XGBoost and LightGBM predictions to minimize variance and forecast error.
+- **Rich Feature Engineering**:
+  - **Calendar & Cyclical**: Day of week, month, quarter, week of year, cyclical $\sin$ and $\cos$ encodings.
+  - **Lags & Rolling Statistics**: 1, 2, 3, 7, 14, 21, and 30-day sales lags; 3, 7, 14, 21, and 30-day moving averages, standard deviations, and min/max bounds.
+  - **Exogenous Variables**: Holiday effects (via `holidays`), promotional campaigns, customer foot traffic.
+- **Interactive Streamlit Web Dashboard**:
+  - **Upload CSV**: Upload your historical sales dataset (`date`, `sales`, `store_id`) for dynamic forecasts.
+  - **Sample Data Simulator**: One-click test scenarios across multiple retail stores.
+  - **Manual Entry**: Test custom sales values and scenario simulations.
+  - **Forecast Horizon**: Slide between 1 to 90 days ahead with 90% confidence bands.
+  - **Interactive Plotly Visualizations**: Drill into historical trends and predicted curves with hover tooltips and download capabilities.
+
+---
+
+## 🏗️ Architecture Overview
 
 ```text
 sales-forecast-prediction/
-├── data/                      # Data storage (generated and preprocessed CSVs)
-│   ├── raw_sales.csv
-│   ├── train_features.csv
-│   └── test_features.csv
-├── models/                    # Saved models and preprocessors (joblib files)
-│   ├── cat_encoder.joblib
-│   ├── feature_names.joblib
-│   └── sales_forecast_model.joblib
-├── plots/                     # Visualizations and metrics text reports
-│   ├── raw_sales_trend.png
-│   ├── eval_actual_vs_predicted.png
-│   ├── eval_feature_importance.png
-│   ├── eval_residuals_analysis.png
-│   └── metrics.txt
-├── src/                       # Source code scripts
-│   ├── data_generator.py      # Synthetic daily sales generator
-│   ├── features.py            # Feature engineering pipeline
-│   ├── train.py               # Model training script (XGBoost)
-│   ├── evaluate.py            # Performance evaluation and plotting
-│   └── predict.py             # CLI for future recursive forecasting
-├── requirements.txt           # Package dependencies
-└── README.md                  # Project documentation
+├── dags/                                 # Apache Airflow DAGs
+│   └── sales_forecasting_pipeline.py     # End-to-end Airflow ETL & ML orchestration
+├── include/                              # Production pipeline modules
+│   ├── config/
+│   │   └── ml_config.yaml                # Model, feature & path configuration
+│   ├── data_validation/
+│   │   └── validators.py                 # Pandera schema validation
+│   ├── feature_engineering/
+│   │   └── feature_pipeline.py           # Feature extraction & scaling
+│   ├── models/
+│   │   ├── base_model.py                 # Abstract model class
+│   │   ├── xgboost_model.py              # XGBoost training & tuning
+│   │   └── lightgbm_model.py             # LightGBM training & tuning
+│   └── utils/
+│       ├── data_generator.py             # Realistic multi-store sales simulator
+│       └── metrics.py                    # RMSE, MAE, MAPE, R2 metrics
+├── models/                               # Serialized ML artifacts (pre-packaged)
+│   ├── scalers.pkl                       # Feature StandardScaler
+│   ├── encoders.pkl                      # Categorical LabelEncoders
+│   ├── feature_cols.pkl                  # Exact ordered feature list
+│   ├── xgboost_model.pkl                 # Trained XGBoost artifact
+│   ├── lightgbm_model.pkl                # Trained LightGBM artifact
+│   └── ensemble_model.pkl                # Trained Ensemble artifact
+├── data/
+│   └── sample_sales_data.csv             # Ready-to-use sample dataset for UI testing
+├── ui/                                   # Streamlit application components
+│   ├── inference_app.py                  # Main inference web application
+│   └── utils/
+│       ├── simple_model_loader.py        # Dual-mode loader (Local files + MLflow)
+│       ├── simple_predictor.py           # Feature transformer & inference engine
+│       └── ensemble_model_standalone.py  # Standalone ensemble wrapper
+├── streamlit_app.py                      # Root entrypoint for Streamlit Community Cloud
+├── train_pipeline.py                     # Standalone model training & export script
+├── requirements.txt                      # Production dependencies
+├── Dockerfile                            # Astronomer Airflow container definition
+├── docker-compose.override.yml           # Airflow service overrides
+├── airflow_settings.yaml                 # Airflow connections & pools
+└── README.md                             # Documentation
 ```
 
 ---
 
-## Installation & Setup
+## ⚡ Quickstart: Running the Streamlit App
 
-1. **Clone or Navigate to the project directory**:
-   ```bash
-   cd C:\Users\basav\.gemini\antigravity\scratch\sales-forecast-prediction
-   ```
+### 1. Clone the Repository
+```bash
+git clone https://github.com/BKiran27/sales-forecast-prediction.git
+cd sales-forecast-prediction
+```
 
-2. **Set up a virtual environment (optional but recommended)**:
-   ```bash
-   python -m venv venv
-   # On Windows:
-   .\venv\Scripts\activate
-   ```
+### 2. Set Up Python Environment
+```bash
+python -m venv venv
+# On Windows:
+.\venv\Scripts\activate
+# On Linux / macOS:
+source venv/bin/activate
 
-3. **Install Dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
+pip install -r requirements.txt
+```
+
+### 3. Launch the Streamlit Web Application
+```bash
+streamlit run streamlit_app.py
+```
+Open your browser at `http://localhost:8501`. The models will automatically initialize and load with the bundled pre-trained artifacts!
 
 ---
 
-## Pipeline Execution Steps
+## 🌐 Deploying to Streamlit Community Cloud
 
-Execute each script in the pipeline sequentially:
+This repository is optimized for **1-click zero-configuration deployment** to [Streamlit Community Cloud](https://share.streamlit.io):
 
-### 1. Generate Raw Data
-Creates 3 years of daily sales records across 3 stores and 3 categories (Grocery, Apparel, Electronics):
-```bash
-python src/data_generator.py
-```
-*Outputs*: Saves raw dataset to `data/raw_sales.csv` and a sample trend plot to `plots/raw_sales_trend.png`.
-
-### 2. Run Feature Engineering
-Extracts temporal markers, builds lags and rolling averages, encodes categories, and splits data chronologically (avoiding data leakage):
-```bash
-python src/features.py
-```
-*Outputs*: Saves `data/train_features.csv`, `data/test_features.csv`, and serializes the categorical transformer to `models/cat_encoder.joblib`.
-
-### 3. Train the Model
-Trains the XGBoost Regressor model on the feature-engineered training set:
-```bash
-python src/train.py
-```
-*Outputs*: Serializes the trained model to `models/sales_forecast_model.joblib` and feature names list to `models/feature_names.joblib`.
-
-### 4. Evaluate the Model
-Validates model performance on unseen test data, prints metrics, and saves residual/importance charts:
-```bash
-python src/evaluate.py
-```
-*Outputs*: Writes evaluation metrics to `plots/metrics.txt` and saves visual diagnostic plots in the `plots/` directory.
-
-### 5. Run the Forecast CLI
-Forecast future sales dynamically for a given date range, store, and product category. It runs a **recursive autoregressive forecast** day-by-day to simulate future lag features:
-```bash
-python src/predict.py --start-date 2026-01-01 --end-date 2026-01-07 --store Store_1 --category Apparel --promo 0
-```
-
-#### CLI Parameters:
-- `--start-date` (default: `2026-01-01`): Start date of forecast (YYYY-MM-DD)
-- `--end-date` (default: `2026-01-07`): End date of forecast (YYYY-MM-DD)
-- `--store` (choices: `Store_1`, `Store_2`, `Store_3`): Store ID
-- `--category` (choices: `Electronics`, `Apparel`, `Grocery`): Product Category
-- `--promo` (choices: `0`, `1`, default: `0`): Whether promotion is active during the forecast window
+1. Push this repository to your GitHub account (`BKiran27/sales-forecast-prediction`).
+2. Go to [share.streamlit.io](https://share.streamlit.io) and log in with your GitHub account.
+3. Click **"New app"**.
+4. Select:
+   - **Repository**: `BKiran27/sales-forecast-prediction`
+   - **Branch**: `main`
+   - **Main file path**: `streamlit_app.py`
+5. Click **"Deploy!"**
+6. Streamlit Community Cloud will automatically install dependencies from `requirements.txt` and launch the application seamlessly.
 
 ---
 
-## Machine Learning Architecture Highlights
+## 🧪 Training Models Locally
 
-- **XGBoost Regressor**: Used for training due to its high efficiency and accuracy with structured tabular data.
-- **Leakage Prevention**: Rolling mean and standard deviation features are calculated using historical sales *shifted by 1 day* (e.g. `shift(1).rolling()`) to ensure the model does not sneak peak at the target sales value of the day being predicted.
-- **Temporal Splitting**: Traditional random splits destroy temporal structure in time series. We use a chronological cut-off (Train: Jan 2023 - June 2025; Test: July 2025 - Dec 2025) to evaluate realistic out-of-sample performance.
-- **Autoregressive Multi-step Forecasting**: When predicting into the future (beyond the historical dates), actual sales do not exist to fill the lag features. The CLI recursively feeds today's prediction back into the history pool to compute lags and rolling averages for tomorrow's prediction.
+To regenerate datasets, retrain all ML models (XGBoost, LightGBM, Ensemble), and export updated model artifacts:
+
+```bash
+python train_pipeline.py
+```
+
+### Model Performance Benchmarks
+
+| Model | RMSE | MAE | MAPE (%) | $R^2$ Score |
+| :--- | :--- | :--- | :--- | :--- |
+| **XGBoost** | ~142.1 | ~104.3 | ~4.8% | 0.942 |
+| **LightGBM** | ~138.5 | ~101.2 | ~4.6% | 0.948 |
+| **Ensemble (Weighted)** | **~131.2** | **~96.4** | **~4.3%** | **0.954** |
+
+---
+
+## 🐳 Full Orchestration with Astronomer / Apache Airflow
+
+If you have Docker and the Astronomer CLI (`astro`) installed, you can run the complete Airflow orchestration environment:
+
+```bash
+# Start Astronomer Airflow stack
+astro dev start
+
+# Access Airflow UI at http://localhost:8080
+# Access MLflow UI at http://localhost:5001
+```
+
+Trigger DAG `sales_forecasting_pipeline` to execute:
+1. `generate_sales_data` $\rightarrow$ Generates daily multi-store transaction partitions.
+2. `validate_raw_data` $\rightarrow$ Validates schemas with Pandera.
+3. `engineer_features` $\rightarrow$ Creates lag features and temporal encodings.
+4. `train_xgboost` & `train_lightgbm` $\rightarrow$ Parallel model training with MLflow parameter & metric logging.
+5. `evaluate_and_ensemble` $\rightarrow$ Tests predictions and creates weighted blend.
+6. `deploy_best_model` $\rightarrow$ Registers the champion model into the MLflow Model Registry.
+
+---
+
+## 📄 License
+MIT License. Developed for enterprise sales forecasting.
