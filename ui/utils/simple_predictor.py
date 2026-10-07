@@ -149,18 +149,23 @@ class SimplePredictor:
                             lambda x: x if x in known_stores else known_stores[0]
                         )
                         encoded_stores = encoder.transform(future_df['store_id'])
+                        future_df['store_id_encoded'] = encoded_stores
                         future_df['store_id'] = encoded_stores
                     except Exception as e:
                         logger.warning(f"Error encoding store_id: {e}")
                         # Default to numeric encoding
                         future_df['store_id'] = 1
+                        future_df['store_id_encoded'] = 0
                 else:
                     # No encoder, convert to numeric
-                    # Extract numeric part if format is "store_XXX"
                     if future_df['store_id'].str.contains('store_').any():
                         future_df['store_id'] = future_df['store_id'].str.extract('(\d+)').astype(int)
                     else:
                         future_df['store_id'] = 1
+                    future_df['store_id_encoded'] = 0
+            else:
+                if 'store_id_encoded' not in future_df.columns:
+                    future_df['store_id_encoded'] = 0
             
             # Select features based on what the model expects
             if self.model_loader.feature_cols:

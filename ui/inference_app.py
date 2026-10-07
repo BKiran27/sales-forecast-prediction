@@ -1,32 +1,36 @@
 """
-Simplified Sales Forecasting Inference UI
+Sales Forecasting Production Web Dashboard
+Dual-Mode: Standalone / Streamlit Community Cloud & Airflow / MLflow
 """
 
-import streamlit as st
-import pandas as pd
-import numpy as np
-import plotly.graph_objects as go
-from datetime import datetime, timedelta
 import os
 import sys
+import logging
+from datetime import datetime, timedelta
+import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+import streamlit as st
 
-# Add paths
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Add local path for utility imports
+curr_dir = os.path.dirname(os.path.abspath(__file__))
+if curr_dir not in sys.path:
+    sys.path.append(curr_dir)
+
 from utils.simple_model_loader import SimpleModelLoader
 from utils.simple_predictor import SimplePredictor
-import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Page config
+# Page configuration
 st.set_page_config(
     page_title="Sales Forecast Inference",
     page_icon="🔮",
     layout="wide"
 )
 
-# Initialize session state
+# Initialize Session State
 if 'model_loader' not in st.session_state:
     loader = SimpleModelLoader()
     st.session_state.model_loader = loader
@@ -34,30 +38,45 @@ if 'model_loader' not in st.session_state:
     st.session_state.models_loaded = loader.loaded
     st.session_state.run_id = "pre_trained_local" if loader.loaded else None
 
-# Header
-st.title("🔮 Sales Forecast Inference")
-st.markdown("Generate sales predictions using trained ML models")
+# Default seed data on startup
+if 'current_data' not in st.session_state:
+    root_dir = os.path.dirname(curr_dir)
+    sample_csv = os.path.join(root_dir, "data", "sample_sales_data.csv")
+    if os.path.exists(sample_csv):
+        try:
+            st.session_state.current_data = pd.read_csv(sample_csv)
+        except Exception:
+            st.session_state.current_data = None
+    else:
+        st.session_state.current_data = None
 
-# Sidebar for model loading
+if 'last_results' not in st.session_state:
+    st.session_state.last_results = None
+
+# Header
+st.title("🔮 Enterprise Sales Forecast Inference")
+st.markdown("Real-time end-to-end multi-model sales forecasting powered by **XGBoost**, **LightGBM**, and **Ensemble Modeling**.")
+
+# Sidebar for Model Configuration & Settings
 with st.sidebar:
-    st.header("📦 Model Configuration")
+    st.header("📦 Model Status")
     
     if not st.session_state.models_loaded:
-        st.warning("⚠️ No models loaded")
+        st.error("⚠️ No models currently loaded")
     else:
-        st.success("✅ Models loaded")
-        st.info(f"Models: {', '.join(st.session_state.model_loader.models.keys())}")
+        st.success("✅ Models Loaded & Active")
+        available_models = list(st.session_state.model_loader.models.keys())
+        st.info(f"Available: **{', '.join([m.upper() for m in available_models])}**")
         if st.session_state.run_id:
-            st.caption(f"Source / Run ID: {st.session_state.run_id[:16]}")
+            st.caption(f"Engine: {st.session_state.run_id}")
     
-    if st.button("🔄 Load/Reload Models", type="primary", use_container_width=True):
-        with st.spinner("Loading models..."):
-            # Check local models first or check latest run
+    if st.button("🔄 Reload Models", type="primary", use_container_width=True):
+        with st.spinner("Checking local models & MLflow registry..."):
             loaded_local = st.session_state.model_loader.load_local_models()
             if loaded_local:
                 st.session_state.models_loaded = True
                 st.session_state.run_id = "pre_trained_local"
-                st.success("✅ Pre-trained models loaded successfully!")
+                st.success("✅ Models refreshed successfully!")
                 st.rerun()
             else:
                 run_id = st.session_state.model_loader.get_latest_run()
@@ -67,289 +86,241 @@ with st.sidebar:
                     st.success("✅ Models loaded from MLflow!")
                     st.rerun()
                 else:
-                    st.error("❌ Failed to load models")
+                    st.error("❌ Failed to reload models")
     
     st.markdown("---")
+    st.header("⚙️ Forecast Settings")
     
-    # Model selection
     model_type = st.selectbox(
-        "Model Type",
+        "Forecast Model",
         ["ensemble", "xgboost", "lightgbm"],
-        help="Ensemble combines multiple models"
+        index=0,
+        help="Ensemble blends XGBoost and LightGBM to minimize variance"
     )
     
-    # Forecast settings
     forecast_days = st.slider(
-        "Forecast Days",
+        "Forecast Horizon (Days)",
         min_value=1,
         max_value=90,
-        value=30
+        value=30,
+        help="Number of days to forecast into the future"
     )
 
-# Main content
+# Main Application Body
 if st.session_state.models_loaded:
-    # Input tabs
-    tab1, tab2, tab3 = st.tabs(["📤 Upload Data", "✏️ Manual Entry", "🎲 Sample Data"])
+    tab1, tab2, tab3 = st.tabs(["🎲 Active / Sample Data", "📤 Upload Custom CSV", "✏️ Manual Daily Entry"])
     
-    input_data = None
-    
+    # TAB 1: Active or Pre-loaded Sample Data
     with tab1:
-        st.markdown("### Upload Historical Sales Data")
-        uploaded_file = st.file_uploader(
-            "Choose a CSV file",
-            type=['csv'],
-            help="File should contain: date, sales, and optionally store_id"
-        )
-        
-        if uploaded_file is not None:
-            input_data = pd.read_csv(uploaded_file)
-            st.success(f"✅ Loaded {len(input_data)} records")
-            
-            # Show preview
-            with st.expander("Data Preview"):
-                st.dataframe(input_data.head())
-                
-            # Basic validation
-            required_cols = ['date', 'sales']
-            missing_cols = [col for col in required_cols if col not in input_data.columns]
-            if missing_cols:
-                st.error(f"Missing required columns: {missing_cols}")
-                input_data = None
-    
-    with tab2:
-        st.markdown("### Enter Recent Sales Data")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            store_id = st.text_input("Store ID", value="store_001")
-        with col2:
-            st.info("Enter sales for the last 7 days")
-        
-        # Create input grid
-        st.markdown("#### Daily Sales Input")
-        cols = st.columns(7)
-        manual_data = []
-        
-        for i in range(7):
-            date = datetime.now() - timedelta(days=6-i)
-            with cols[i]:
-                st.caption(date.strftime('%a %m/%d'))
-                sales = st.number_input(
-                    "Sales ($)",
-                    min_value=0,
-                    value=5000 + i*100,
-                    key=f"manual_{i}",
-                    label_visibility="collapsed"
-                )
-                manual_data.append({
-                    'date': date,
-                    'store_id': store_id,
-                    'sales': sales
-                })
-        
-        if st.button("Use Manual Data", key="manual_btn"):
-            input_data = pd.DataFrame(manual_data)
-            st.success("✅ Manual data ready for prediction")
-    
-    with tab3:
-        st.markdown("### Generate Sample Data")
+        st.markdown("### Pre-Loaded Sales Dataset")
+        st.markdown("Use the built-in realistic multi-store sales data or generate a customized scenario:")
         
         col1, col2, col3 = st.columns(3)
         with col1:
-            sample_days = st.number_input("Historical Days", value=60, min_value=7)
+            sample_days = st.number_input("Days of History", value=60, min_value=7, max_value=365)
         with col2:
-            avg_sales = st.number_input("Average Daily Sales", value=5000, min_value=100)
+            avg_sales = st.number_input("Average Baseline Sales ($)", value=5000, min_value=100)
         with col3:
-            volatility = st.slider("Volatility (%)", 0, 50, 20)
-        
-        if st.button("Generate Sample Data", key="sample_btn"):
-            # Generate realistic sample data
-            dates = pd.date_range(end=datetime.now(), periods=sample_days, freq='D')
+            volatility = st.slider("Demand Volatility (%)", 0, 50, 15)
             
-            # Add trend and seasonality
+        if st.button("⚡ Generate New Random Scenario", key="gen_sample_btn"):
+            dates = pd.date_range(end=datetime.now(), periods=sample_days, freq='D')
             trend = np.linspace(0, avg_sales * 0.1, sample_days)
             seasonal = avg_sales * 0.2 * np.sin(2 * np.pi * np.arange(sample_days) / 7)
             noise = np.random.normal(0, avg_sales * volatility / 100, sample_days)
+            sales = np.maximum(avg_sales + trend + seasonal + noise, 10.0)
             
-            sales = avg_sales + trend + seasonal + noise
-            sales = np.maximum(sales, 0)  # Ensure non-negative
-            
-            input_data = pd.DataFrame({
+            st.session_state.current_data = pd.DataFrame({
                 'date': dates,
                 'store_id': 'store_001',
-                'sales': sales
+                'sales': np.round(sales, 2)
             })
+            st.session_state.last_results = None
+            st.success("✅ Generated new scenario data!")
+            st.rerun()
+
+    # TAB 2: Upload CSV
+    with tab2:
+        st.markdown("### Upload Historical Sales Data (CSV)")
+        uploaded_file = st.file_uploader(
+            "Upload CSV file with columns: date, sales (and optionally store_id)",
+            type=['csv'],
+            help="Ensure date is formatted YYYY-MM-DD or standard datetime string."
+        )
+        if uploaded_file is not None:
+            try:
+                uploaded_df = pd.read_csv(uploaded_file)
+                required_cols = ['date', 'sales']
+                missing_cols = [c for c in required_cols if c not in uploaded_df.columns]
+                if missing_cols:
+                    st.error(f"❌ Uploaded CSV is missing required columns: {missing_cols}")
+                else:
+                    if 'store_id' not in uploaded_df.columns:
+                        uploaded_df['store_id'] = 'store_001'
+                    st.session_state.current_data = uploaded_df
+                    st.session_state.last_results = None
+                    st.success(f"✅ Successfully loaded {len(uploaded_df)} rows from CSV!")
+            except Exception as e:
+                st.error(f"❌ Failed to parse CSV: {e}")
+
+    # TAB 3: Manual Daily Entry
+    with tab3:
+        st.markdown("### Quick 7-Day Manual Input")
+        col_s1, col_s2 = st.columns(2)
+        with col_s1:
+            manual_store = st.text_input("Store Identifier", value="store_001")
+        with col_s2:
+            base_manual = st.number_input("Base Value ($)", value=4500, min_value=100)
             
-            st.success("✅ Sample data generated")
-            
-            # Show chart
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(
-                x=input_data['date'],
-                y=input_data['sales'],
-                mode='lines',
-                name='Sample Sales Data'
-            ))
-            fig.update_layout(
-                title="Generated Sample Data",
-                xaxis_title="Date",
-                yaxis_title="Sales ($)",
-                height=300
-            )
-            st.plotly_chart(fig, use_container_width=True)
-    
-    # Prediction section
-    if input_data is not None:
+        m_cols = st.columns(7)
+        manual_records = []
+        for i in range(7):
+            d = datetime.now() - timedelta(days=6 - i)
+            with m_cols[i]:
+                st.caption(d.strftime('%a %m/%d'))
+                val = st.number_input(
+                    "Sales",
+                    value=int(base_manual + (i * 120)),
+                    key=f"m_val_{i}",
+                    label_visibility="collapsed"
+                )
+                manual_records.append({
+                    'date': d.strftime('%Y-%m-%d'),
+                    'store_id': manual_store,
+                    'sales': float(val)
+                })
+        if st.button("Apply Manual Data", key="apply_manual_btn"):
+            st.session_state.current_data = pd.DataFrame(manual_records)
+            st.session_state.last_results = None
+            st.success("✅ Applied manual 7-day data!")
+            st.rerun()
+
+    # Active Dataset Review & Forecast Trigger
+    input_data = st.session_state.current_data
+    if input_data is not None and len(input_data) > 0:
         st.markdown("---")
-        st.header("📊 Generate Forecast")
-        
-        # Center the button with empty columns on sides
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            if st.button("🚀 Run Prediction", type="primary", use_container_width=True, key="run_prediction"):
-                with st.spinner("Generating forecast..."):
-                    # Run prediction
+        with st.expander("📋 Active Dataset Overview", expanded=False):
+            c_info1, c_info2, c_info3 = st.columns(3)
+            with c_info1:
+                st.write(f"**Total Records**: {len(input_data)}")
+            with c_info2:
+                st.write(f"**Store ID**: {input_data['store_id'].iloc[0] if 'store_id' in input_data.columns else 'store_001'}")
+            with c_info3:
+                st.write(f"**Recent Mean Sales**: ${input_data['sales'].mean():,.2f}")
+            st.dataframe(input_data.tail(10), use_container_width=True)
+
+        # Centered Run Forecast Button
+        _, col_btn, _ = st.columns([1, 2, 1])
+        with col_btn:
+            if st.button("🚀 Run Sales Forecast", type="primary", use_container_width=True, key="run_btn"):
+                with st.spinner(f"Computing {forecast_days}-day forecast with {model_type.upper()}..."):
                     results = st.session_state.predictor.predict(
                         input_data,
                         model_type=model_type,
                         forecast_days=forecast_days
                     )
-                    
-                    if results['success']:
-                        st.success("✅ Forecast generated successfully!")
-                        
-                        # Show metrics
-                        st.markdown("### 📈 Forecast Summary")
-                        col1, col2, col3, col4 = st.columns(4)
-                        with col1:
-                            st.metric(
-                                "Total Forecast",
-                                f"${results['summary']['total_predicted_sales']:,.0f}"
-                            )
-                        with col2:
-                            st.metric(
-                                "Daily Average",
-                                f"${results['summary']['average_daily_sales']:,.0f}"
-                            )
-                        with col3:
-                            st.metric(
-                                "Forecast Period",
-                                f"{forecast_days} days"
-                            )
-                        with col4:
-                            st.metric(
-                                "Model Used",
-                                model_type.upper()
-                            )
-                        
-                        # Visualization
-                        st.markdown("### 📊 Forecast Visualization")
-                        
-                        predictions_df = results['predictions']
-                        historical_mask = predictions_df.index < len(input_data)
-                        
-                        fig = go.Figure()
-                        
-                        # Historical data
-                        fig.add_trace(go.Scatter(
-                            x=predictions_df[historical_mask]['date'],
-                            y=input_data['sales'],
-                            mode='lines',
-                            name='Historical',
-                            line=dict(color='blue', width=2)
-                        ))
-                        
-                        # Forecast
-                        fig.add_trace(go.Scatter(
-                            x=predictions_df[~historical_mask]['date'],
-                            y=predictions_df[~historical_mask]['predicted_sales'],
-                            mode='lines',
-                            name='Forecast',
-                            line=dict(color='green', width=3)
-                        ))
-                        
-                        # Confidence interval
-                        fig.add_trace(go.Scatter(
-                            x=predictions_df[~historical_mask]['date'],
-                            y=predictions_df[~historical_mask]['upper_bound'],
-                            fill=None,
-                            mode='lines',
-                            line_color='rgba(0,255,0,0)',
-                            showlegend=False
-                        ))
-                        
-                        fig.add_trace(go.Scatter(
-                            x=predictions_df[~historical_mask]['date'],
-                            y=predictions_df[~historical_mask]['lower_bound'],
-                            fill='tonexty',
-                            mode='lines',
-                            line_color='rgba(0,255,0,0.2)',
-                            name='95% Confidence'
-                        ))
-                        
-                        fig.update_layout(
-                            title="Sales Forecast with Confidence Intervals",
-                            xaxis_title="Date",
-                            yaxis_title="Sales ($)",
-                            hovermode='x unified',
-                            height=500,
-                            showlegend=True
-                        )
-                        
-                        st.plotly_chart(fig, use_container_width=True)
-                        
-                        # Download section
-                        st.markdown("### 💾 Export Results")
-                        
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            # Prepare download data
-                            export_df = predictions_df[~historical_mask].copy()
-                            export_df = export_df.round(2)
-                            
-                            csv = export_df.to_csv(index=False)
-                            st.download_button(
-                                label="📥 Download Forecast (CSV)",
-                                data=csv,
-                                file_name=f"sales_forecast_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                                mime="text/csv"
-                            )
-                        
-                        with col2:
-                            st.info("Forecast includes predictions with confidence intervals")
-                    
-                    else:
-                        st.error(f"❌ Prediction failed: {results['error']}")
+                    st.session_state.last_results = results
 
+        # Display Forecast Results if available
+        if st.session_state.last_results is not None:
+            results = st.session_state.last_results
+            if results.get('success'):
+                st.success("✅ Forecast Generated Successfully!")
+                
+                # Metrics Row
+                m1, m2, m3, m4 = st.columns(4)
+                with m1:
+                    st.metric("Total Projected Sales", f"${results['summary']['total_predicted_sales']:,.0f}")
+                with m2:
+                    st.metric("Projected Daily Average", f"${results['summary']['average_daily_sales']:,.0f}")
+                with m3:
+                    st.metric("Horizon", f"{forecast_days} Days")
+                with m4:
+                    st.metric("Model Architecture", results.get('model_type', model_type).upper())
+                
+                # Plotly Chart
+                st.markdown("### 📈 Historical Sales & Future Forecast")
+                predictions_df = results['predictions']
+                
+                fig = go.Figure()
+                
+                # 1. Historical Line
+                hist_dates = pd.to_datetime(input_data['date'])
+                fig.add_trace(go.Scatter(
+                    x=hist_dates,
+                    y=input_data['sales'],
+                    mode='lines+markers',
+                    name='Historical Sales',
+                    line=dict(color='#1f77b4', width=2),
+                    marker=dict(size=4)
+                ))
+                
+                # 2. Predicted Line
+                pred_dates = pd.to_datetime(predictions_df['date'])
+                fig.add_trace(go.Scatter(
+                    x=pred_dates,
+                    y=predictions_df['predicted_sales'],
+                    mode='lines+markers',
+                    name=f'{model_type.upper()} Forecast',
+                    line=dict(color='#2ca02c', width=3),
+                    marker=dict(size=5)
+                ))
+                
+                # 3. Upper Bound
+                fig.add_trace(go.Scatter(
+                    x=pred_dates,
+                    y=predictions_df['upper_bound'],
+                    fill=None,
+                    mode='lines',
+                    line=dict(color='rgba(0,0,0,0)', width=0),
+                    showlegend=False
+                ))
+                
+                # 4. Lower Bound with shaded region
+                fig.add_trace(go.Scatter(
+                    x=pred_dates,
+                    y=predictions_df['lower_bound'],
+                    fill='tonexty',
+                    mode='lines',
+                    line=dict(color='rgba(44, 160, 44, 0.2)', width=0),
+                    fillcolor='rgba(44, 160, 44, 0.18)',
+                    name='Confidence Interval'
+                ))
+                
+                fig.update_layout(
+                    xaxis_title="Date",
+                    yaxis_title="Sales ($)",
+                    hovermode='x unified',
+                    template='plotly_white',
+                    height=520,
+                    margin=dict(l=30, r=30, t=40, b=40),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Export and Data Table
+                st.markdown("### 💾 Export & Review Forecast Data")
+                export_cols = ['date', 'predicted_sales', 'lower_bound', 'upper_bound']
+                export_df = predictions_df[export_cols].copy().round(2)
+                
+                col_exp1, col_exp2 = st.columns([1, 1])
+                with col_exp1:
+                    csv_data = export_df.to_csv(index=False)
+                    st.download_button(
+                        label="📥 Download Forecast CSV",
+                        data=csv_data,
+                        file_name=f"sales_forecast_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        mime="text/csv",
+                        type="primary"
+                    )
+                with col_exp2:
+                    st.caption("Forecast estimates include baseline prediction along with lower and upper confidence bounds.")
+                    
+                st.dataframe(export_df, use_container_width=True)
+            else:
+                st.error(f"❌ Prediction error: {results.get('error')}")
+    else:
+        st.info("👈 Please load or enter sales data using the tabs above to begin forecasting.")
 else:
-    # No models loaded
-    st.warning("⚠️ Please load models using the sidebar before making predictions.")
-    st.info("👈 Click 'Load/Reload Models' in the sidebar to begin")
-    
-    # Add helpful information
-    with st.expander("ℹ️ No models found? Here's what to do:", expanded=True):
-        st.markdown("""
-        ### First Time Setup
-        
-        If this is your first time using the system, you need to train the models:
-        
-        1. **Open Airflow UI**: [http://localhost:8080](http://localhost:8080)
-           - Username: `admin`
-           - Password: `admin`
-        
-        2. **Run the Training DAG**:
-           - Find `sales_forecast_training` in the DAG list
-           - Click the play button (▶️) to trigger it
-           - Wait for training to complete (5-10 minutes)
-        
-        3. **Come back here**:
-           - Click "Load/Reload Models" again
-           - Models should load successfully
-        
-        ### Quick Check
-        
-        - **MLflow UI**: [http://localhost:5001](http://localhost:5001) - Check if models exist
-        - **MinIO UI**: [http://localhost:9001](http://localhost:9001) - Check artifact storage
-          - Username: `minioadmin`
-          - Password: `minioadmin`
-        """)
+    st.warning("⚠️ Please load models from the sidebar before initiating forecasts.")
